@@ -1,0 +1,5 @@
+.buildozer/
+bin/
+log.txt
+vk_config.v2.json
+vksvr_cfg.json

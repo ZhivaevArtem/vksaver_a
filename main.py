@@ -11,6 +11,8 @@ from vk_api import VkApi
 from vk_api.audio import VkAudio
 import requests
 from jconfig.jconfig import Config
+from vk_api.exceptions import AuthError, AccessDenied, VkApiError
+from requests.exceptions import ConnectionError as RequestError
 
 
 class MyApp(App):
@@ -32,6 +34,8 @@ class MyApp(App):
                 if 'path' in d:
                     path = d['path']
         except OSError:
+            pass
+        except json.decoder.JSONDecodeError:
             pass
 
         self.widgets = {
@@ -56,9 +60,23 @@ class MyApp(App):
         os.chdir(path)
 
         session = VkApi(login=login, password=password, config_filename=self.vk_cfg)
-        session.auth(reauth=True)
-        au = VkAudio(session)
-        songs = au.get()
+        error = None
+        try:
+            session.auth(reauth=True)
+            au = VkAudio(session)
+            songs = au.get()
+        except RequestError:
+            error = 'Connection error'
+        except AuthError:
+            error = 'Auth error'
+        except VkApiError:
+            error = 'Request error'
+        except AccessDenied:
+            error = 'Access denied'
+
+        if error:
+            self.widgets['status'].text = error
+            return
 
         counter = 1
         for i in songs:
