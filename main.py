@@ -3,8 +3,6 @@ import json
 import threading
 import time
 import re
-import signal
-from typing import Tuple
 
 from kivy.app import App
 from kivy.uix.button import Button
@@ -88,7 +86,13 @@ class DownloadThread(threading.Thread):
         if songs is str:
             self._widgets['status'].text = songs
             return
+        p = os.getcwd()
+        os.chdir(self._data['path'])
         dumb_cfg(self._cfg_path, self._data)
+
+        for i in os.listdir():
+            if re.match(r'\d{4} .*', i):
+                os.rename(i, i[5:])
 
         counter = 1
         size = len(songs)
@@ -97,15 +101,18 @@ class DownloadThread(threading.Thread):
                 return
             r = requests.get(i['url'])
             if r.status_code == 200:
-                song = f"%04d {i['artist']} - {i['title']}.mp3" % counter
+                song = f"{i['artist']} - {i['title']}.mp3"
                 song = re.sub(r'[\\/:*?"<>|]', ' ', song)  # removing forbidden characters
-                song = os.path.join(self._data['path'], song)
-                self._widgets['status'].text = f"({counter} / {size}) {os.path.basename(song)[5:-4]}"
+                self._widgets['status'].text = song
                 if not os.path.exists(song):
+                    song = f"%04d {song}" % counter
                     with open(song, 'wb') as f:
                         f.write(r.content)
+                elif os.path.isfile(song):
+                    os.rename(song, f"%04d {song}" % counter)
             counter += 1
         self._widgets['status'].text = 'done!'
+        os.chdir(p)
 
     def handle_2fa(self):
         ans = [None]
@@ -141,12 +148,11 @@ class MyApp(App):
             path = d['path']
 
         self._widgets = {
-            'login':    TextInput(text=login),
-            'password': TextInput(text=password),
-            'path':     TextInput(text=path),
+            'login':    TextInput(text=login, multiline=0),
+            'password': TextInput(text=password, multiline=0),
+            'path':     TextInput(text=path, multiline=0),
             'status':   Label(text='status'),
-            'button':   Button(text='Go!', on_release=self.handle_button),
-            'test': Button(text='test button', on_release=self.test_button)
+            'button':   Button(text='Go!', on_release=self.handle_button)
         }
         main_widget = BoxLayout(orientation='vertical')
         for key, i in self._widgets.items():
@@ -159,28 +165,19 @@ class MyApp(App):
         if self._download_thread is not None:
             self._download_thread.kill()
 
-    def on_pause(self):
-        pass
-
-    def on_resume(self):
-        pass
-
     def handle_button(self, instance):
         self._download_thread = DownloadThread(self._app_dir, self._widgets)
         self._download_thread.start()
 
-    def test_button(self, instance):
-        MyPopup([None], 'BUTTON', title='TITLE').open()
-
 
 class MyPopup(Popup):
     def __init__(self, ret, button_text, **kwargs):
-        kwargs['size_hint'] = (.9, .9)
+        kwargs['size_hint'] = (1, .5)
         super(MyPopup, self).__init__(**kwargs)
         self._ret = ret
         self._answer = None
         self._widgets = {
-            'input': TextInput(),
+            'input': TextInput(multiline=0),
             'button': Button(text=button_text, on_release=self.handle_button)
         }
         main_widget = BoxLayout(orientation='vertical')
